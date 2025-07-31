@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学生支援チャットボット</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; overflow-x: hidden; }
+        .container { max-width: 800px; margin: 0 auto; background: rgba(255, 255, 255, 0.98); border-radius: 25px; box-shadow: 0 30px 60px rgba(0, 0, 0, 0.15); overflow: hidden; display: flex; flex-direction: column; height: calc(100vh - 40px); }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }
+        .header h1 { font-size: 2rem; margin-bottom: 10px; text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3); }
+        .chat-container { display: flex; flex-direction: column; flex-grow: 1; background: white; overflow: hidden; position: relative; }
+        .chat-header { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; padding: 15px; text-align: center; font-weight: 600; font-size: 1.1rem; }
+        .chat-messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
+        .message { max-width: 80%; padding: 15px 20px; border-radius: 20px; position: relative; animation: slideIn 0.3s ease-out; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .message.user { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; align-self: flex-end; margin-left: auto; }
+        .message.bot { background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); color: #333; align-self: flex-start; border-left: 4px solid #4facfe; }
+        .message-content { line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; }
+        .message-time { font-size: 0.8rem; opacity: 0.7; margin-top: 8px; }
+        .chat-input-container { padding: 20px; background: #f8f9fa; border-top: 1px solid #e9ecef; }
+        .chat-input-box { display: flex; gap: 10px; align-items: flex-end; }
+        .chat-input { flex: 1; padding: 15px; border: 2px solid #e9ecef; border-radius: 25px; font-size: 16px; outline: none; transition: all 0.3s ease; resize: none; min-height: 50px; max-height: 120px; }
+        .chat-input:focus { border-color: #4facfe; box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.1); }
+        .send-btn { padding: 15px 25px; background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; border: none; border-radius: 25px; cursor: pointer; font-weight: 600; transition: all 0.3s ease; display: flex; align-items: center; gap: 8px; }
+        .send-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(79, 172, 254, 0.3); }
+        .send-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .feedback-container { margin-top: 12px; padding-top: 8px; border-top: 1px solid #ddd; }
+        .feedback-btn { background: none; border: 1px solid #ccc; border-radius: 15px; padding: 3px 8px; margin-left: 8px; cursor: pointer; transition: all 0.2s ease; }
+        .feedback-btn:hover { background: #e9ecef; transform: scale(1.1); }
+        .error-message { background: #ffebee; color: #c62828; padding: 10px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #f44336; }
+        .loading-indicator { display: inline-block; width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #4facfe; border-radius: 50%; animation: spin 1s linear infinite; margin-right: 10px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @media (max-width: 480px) {
+            body { padding: 5px; }
+            .container { height: calc(100vh - 10px); }
+            .header { padding: 20px; }
+            .header h1 { font-size: 1.6rem; }
+            .chat-input-container { padding: 15px; }
+            .chat-input-box { flex-direction: column; align-items: stretch; }
+            .send-btn { justify-content: center; padding: 12px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 学生支援チャットボット</h1>
+            <p>学生生活に関する様々な質問にお答えします！</p>
+        </div>
+        <div class="chat-container">
+            <div class="chat-header">💬 AIチャット</div>
+            <div class="chat-messages" id="chatMessages">
+                <div class="message bot">
+                    <div class="message-content">
+                        私は学生支援チャットボットです。🚀<br>
+                        - 学生証を紛失・盗難・汚損したときは？<br>
+                        - 新しいサークルを作るには？<br>
+                        - 休学・復学・退学の手続きをしたいときは？<br>
+                        様々な質問にお答えします！
+                    </div>
+                    <div class="message-time">システム起動時刻</div>
+                </div>
+            </div>
+            <div class="chat-input-container">
+                <div class="chat-input-box">
+                    <textarea id="chatInput" class="chat-input" placeholder="質問を入力してください..." rows="1"></textarea>
+                    <button id="sendBtn" class="send-btn">
+                        <span>送信</span>
+                        <span>🔍</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // サーバーのURLを動的に設定
+    const BACKEND_API_BASE_URL = window.location.origin;
+    
+    // DOM要素の取得
+    const chatMessages = document.getElementById('chatMessages');
+    const chatInput = document.getElementById('chatInput');
+    const sendBtn = document.getElementById('sendBtn');
+
+    // デフォルト設定
+    const DEFAULT_CONFIG = {
+        model: 'llama3.2:latest',
+        collection: 'default',
+        embedding_model: 'all-MiniLM-L6-v2',
+        top_k: 5
+    };
+
+    // メッセージ表示関数
+    function addMessage(text, type) {
+        const messageWrapper = document.createElement('div');
+        messageWrapper.className = `message ${type}`;
+        
+        const messageContent = document.createElement('div');
+        messageContent.className = 'message-content';
+        messageContent.textContent = text;
+        messageWrapper.appendChild(messageContent);
+        
+        const messageTime = document.createElement('div');
+        messageTime.className = 'message-time';
+        messageTime.textContent = new Date().toLocaleTimeString();
+        messageWrapper.appendChild(messageTime);
+
+        chatMessages.appendChild(messageWrapper);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        return messageWrapper;
+    }
+
+    // フィードバック送信関数
+    function sendFeedback(element, rating) {
+        const messageWrapper = element.closest('.message');
+        const logId = messageWrapper.dataset.logId;
+
+        if (!logId) {
+            console.error("Log ID not found for feedback.");
+            return;
+        }
+        
+        fetch(`${BACKEND_API_BASE_URL}/feedback`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                log_id: parseInt(logId, 10),
+                rating: rating
+            })
+        }).then(res => {
+            if(!res.ok) {
+                console.error("Failed to send feedback.");
+            }
+        }).catch(error => {
+            console.error("Error sending feedback:", error);
+        });
+
+        const feedbackContainer = element.parentElement;
+        feedbackContainer.innerHTML = '<span style="font-size: 0.8rem; color: #28a745;">フィードバックありがとうございます！</span>';
+    }
+
+    // システム初期化
+    async function initializeSystem() {
+        try {
+            // バックエンドの接続確認
+            const healthResponse = await fetch(`${BACKEND_API_BASE_URL}/health`);
+            if (!healthResponse.ok) {
+                addMessage('⚠️ システムが準備中です。しばらくお待ちください。', 'bot');
+                return;
+            }
+
+            // デフォルトコレクションの存在確認・作成
+            try {
+                await fetch(`${BACKEND_API_BASE_URL}/collections`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: DEFAULT_CONFIG.collection })
+                });
+            } catch (error) {
+                // コレクションが既に存在する場合はエラーを無視
+            }
+
+        } catch (error) {
+            addMessage('❌ システムに接続できません。サーバーが起動していることを確認してください。', 'bot');
+        }
+    }
+
+    // メッセージ送信関数
+    async function sendMessage() {
+        const userInput = chatInput.value.trim();
+        if (!userInput) return;
+
+        addMessage(userInput, 'user');
+        chatInput.value = '';
+        chatInput.style.height = 'auto';
+        sendBtn.disabled = true;
+
+        const botMessageElement = addMessage('思考中...', 'bot');
+        let fullResponse = '';
+
+        try {
+            // 複数のエンドポイントを試行
+            let response;
+            const endpoints = ['/chat_for_client', '/chat'];
+            let lastError;
+
+            for (const endpoint of endpoints) {
+                try {
+                    const payload = endpoint === '/chat_for_client' 
+                        ? { query: userInput }
+                        : {
+                            query: userInput,
+                            model: DEFAULT_CONFIG.model,
+                            collection: DEFAULT_CONFIG.collection,
+                            embedding_model: DEFAULT_CONFIG.embedding_model,
+                            top_k: DEFAULT_CONFIG.top_k
+                        };
+
+                    response = await fetch(`${BACKEND_API_BASE_URL}${endpoint}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.ok) {
+                        break; // 成功したらループを抜ける
+                    }
+                    lastError = await response.text();
+                } catch (error) {
+                    lastError = error.message;
+                    continue; // 次のエンドポイントを試行
+                }
+            }
+
+            if (!response || !response.ok) {
+                throw new Error(lastError || 'サーバーとの通信に失敗しました');
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            botMessageElement.querySelector('.message-content').textContent = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) {
+                    // フィードバックボタンを追加
+                    if (botMessageElement.dataset.logId) {
+                        const feedbackContainer = document.createElement('div');
+                        feedbackContainer.className = 'feedback-container';
+                        feedbackContainer.innerHTML = `
+                        <span>この回答は役に立ちましたか？</span>
+                        <button class="feedback-btn" onclick="sendFeedback(this, 'good')">👍</button>
+                        <button class="feedback-btn" onclick="sendFeedback(this, 'bad')">👎</button>
+                        `;
+                        botMessageElement.appendChild(feedbackContainer);
+                    }
+                    break;
+                }
+                
+                const chunk = decoder.decode(value, {stream: true});
+                const lines = chunk.split('\n');
+                
+                for (const line of lines) {
+                    if (line.trim().startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.substring(6));
+                            if (data.content) {
+                                fullResponse += data.content;
+                                botMessageElement.querySelector('.message-content').textContent = fullResponse;
+                                chatMessages.scrollTop = chatMessages.scrollHeight;
+                            }
+                            if (data.log_id) {
+                                botMessageElement.dataset.logId = data.log_id;
+                            }
+                        } catch (e) {
+                            // JSONパースエラーはストリーミング中に発生しうるので無視
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('メッセージ送信エラー:', error);
+            let errorMessage = 'エラーが発生しました。';
+            
+            if (error.message.includes('404') || error.message.includes('Not Found')) {
+                errorMessage = '❌ サーバーのAPIエンドポイントが見つかりません。管理者にお問い合わせください。';
+            } else if (error.message.includes('Failed to fetch')) {
+                errorMessage = '❌ サーバーに接続できません。ネットワーク接続を確認してください。';
+            } else {
+                errorMessage = `❌ ${error.message}`;
+            }
+            
+            botMessageElement.querySelector('.message-content').textContent = errorMessage;
+        } finally {
+            sendBtn.disabled = false;
+        }
+    }
+
+    // イベントリスナーの設定
+    document.addEventListener('DOMContentLoaded', function() {
+        chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        chatInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+
+        sendBtn.addEventListener('click', sendMessage);
+        
+        // システム初期化
+        initializeSystem();
+    });
+</script>
+</body>
+</html>

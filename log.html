@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>チャットログ管理画面</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); 
+            min-height: 100vh; 
+            padding: 20px; 
+            color: #333;
+        }
+        .container { 
+            max-width: 1400px; 
+            margin: 0 auto; 
+            background: #ffffff; 
+            border-radius: 25px; 
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.1); 
+            overflow: hidden;
+        }
+        .header { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            color: white; 
+            padding: 30px 40px; 
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 { 
+            font-size: 2rem; 
+            text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.2);
+        }
+        .refresh-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        .refresh-btn:hover {
+            background: white;
+            color: #667eea;
+        }
+        .content {
+            padding: 30px;
+        }
+        .loading, .no-logs, .error-message {
+            text-align: center;
+            padding: 40px;
+            font-size: 1.1rem;
+            color: #6c757d;
+        }
+        .error-message {
+            color: #dc3545;
+        }
+        table { 
+            border-collapse: collapse; 
+            width: 100%; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        th, td { 
+            padding: 15px; 
+            text-align: left; 
+            vertical-align: top;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        th { 
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white; 
+            font-size: 0.9rem;
+            text-transform: uppercase;
+        }
+        tr:last-child td {
+             border-bottom: none;
+        }
+        tr:hover { 
+            background-color: #f8f9fa; 
+        }
+        td {
+            font-size: 0.95rem;
+        }
+        .query, .response { 
+            white-space: pre-wrap; 
+            word-wrap: break-word; 
+            line-height: 1.6;
+            max-width: 400px;
+        }
+        .feedback-good { color: #28a745; font-weight: bold; }
+        .feedback-bad { color: #dc3545; font-weight: bold; }
+        .feedback-na { color: #888; }
+        .col-id { width: 20%; }
+        .col-timestamp { width: 15%; }
+        .col-query { width: 25%; }
+        .col-response { width: 30%; }
+        .col-feedback { width: 10%; text-align: center;}
+        .stats {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+        }
+        .stat-item { flex: 1; }
+        .stat-number { font-size: 2rem; font-weight: bold; color: #667eea; }
+        .stat-label { color: #666; margin-top: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 チャットログ管理画面</h1>
+            <button class="refresh-btn" onclick="loadLogs()">最新の情報に更新</button>
+        </div>
+        <div class="content">
+            <div class="stats" id="statsContainer" style="display: none;">
+                <div class="stat-item">
+                    <div class="stat-number" id="totalLogs">0</div>
+                    <div class="stat-label">総ログ数</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="goodFeedback">0</div>
+                    <div class="stat-label">👍 評価</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="badFeedback">0</div>
+                    <div class="stat-label">👎 評価</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="noFeedback">0</div>
+                    <div class="stat-label">未評価</div>
+                </div>
+            </div>
+
+            <div id="message-container">
+                 <div class="loading" id="loadingMessage">ログを読み込み中...</div>
+            </div>
+            <table id="logsTable" style="display: none;">
+                <thead>
+                    <tr>
+                        <th class="col-id">ログID</th>
+                        <th class="col-timestamp">タイムスタンプ</th>
+                        <th class="col-query">ユーザーの質問</th>
+                        <th class="col-response">ボットの回答</th>
+                        <th class="col-feedback">評価</th>
+                    </tr>
+                </thead>
+                <tbody id="logsTableBody">
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <script>
+        function escapeHtml(unsafe) {
+            if (typeof unsafe !== 'string') return '';
+            return unsafe
+                 .replace(/&/g, "&amp;")
+                 .replace(/</g, "&lt;")
+                 .replace(/>/g, "&gt;")
+                 .replace(/"/g, "&quot;")
+                 .replace(/'/g, "&#039;");
+        }
+
+        function updateStats(logs) {
+            const totalLogs = logs.length;
+            const goodCount = logs.filter(log => log.rating === 'good').length;
+            const badCount = logs.filter(log => log.rating === 'bad').length;
+            const noCount = totalLogs - goodCount - badCount;
+
+            document.getElementById('totalLogs').textContent = totalLogs;
+            document.getElementById('goodFeedback').textContent = goodCount;
+            document.getElementById('badFeedback').textContent = badCount;
+            document.getElementById('noFeedback').textContent = noCount;
+
+            if (totalLogs > 0) {
+                document.getElementById('statsContainer').style.display = 'flex';
+            }
+        }
+
+        async function loadLogs() {
+            const table = document.getElementById('logsTable');
+            const tableBody = document.getElementById('logsTableBody');
+            const messageContainer = document.getElementById('message-container');
+            
+            messageContainer.innerHTML = '<div class="loading" id="loadingMessage">ログを読み込み中...</div>';
+            table.style.display = 'none';
+            document.getElementById('statsContainer').style.display = 'none';
+
+            try {
+                const response = await fetch('/logs');
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ detail: `サーバーエラー: ${response.status}` }));
+                    throw new Error(errorData.detail || `サーバーエラー: ${response.status}`);
+                }
+                const logs = await response.json();
+
+                if (!logs || logs.length === 0) {
+                    messageContainer.innerHTML = '<div class="no-logs">ログはまだありません。</div>';
+                    return;
+                }
+
+                logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                
+                let tableRowsHtml = '';
+                for (const log of logs) {
+                    const ratingClass = log.rating === 'good' ? 'feedback-good' : (log.rating === 'bad' ? 'feedback-bad' : 'feedback-na');
+                    const ratingText = log.rating === 'good' ? '👍' : (log.rating === 'bad' ? '👎' : 'N/A');
+
+                    tableRowsHtml += `
+                        <tr>
+                            <td>${escapeHtml(log.log_id)}</td>
+                            <td>${escapeHtml(log.timestamp)}</td>
+                            <td class="query">${escapeHtml(log.query)}</td>
+                            <td class="response">${escapeHtml(log.response)}</td>
+                            <td class="${ratingClass}">${ratingText}</td>
+                        </tr>
+                    `;
+                }
+                tableBody.innerHTML = tableRowsHtml;
+                messageContainer.innerHTML = ''; // メッセージをクリア
+                table.style.display = 'table';
+                updateStats(logs);
+
+            } catch (error) {
+                messageContainer.innerHTML = `<div class="error-message">ログの読み込みに失敗しました: ${error.message}</div>`;
+                console.error('Error fetching logs:', error);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadLogs);
+    </script>
+</body>
+</html>

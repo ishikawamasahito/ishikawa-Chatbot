@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学生支援チャットボット【管理者画面】</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; overflow-x: hidden; }
+        .container { max-width: 1400px; margin: 0 auto; background: rgba(255, 255, 255, 0.98); border-radius: 25px; box-shadow: 0 30px 60px rgba(0, 0, 0, 0.15); overflow: hidden; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px; text-align: center; position: relative; overflow: hidden; }
+        .header h1 { font-size: 2.5rem; margin-bottom: 15px; text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3); position: relative; z-index: 1; }
+        .header p { font-size: 1.1rem; opacity: 0.9; position: relative; z-index: 1; }
+        .main-content { display: grid; grid-template-columns: 1fr 400px; gap: 30px; padding: 30px; min-height: 600px; }
+        .chat-container { display: flex; flex-direction: column; background: white; border-radius: 20px; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1); overflow: hidden; position: relative; }
+        .chat-header { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; padding: 20px; text-align: center; font-weight: 600; font-size: 1.1rem; }
+        .chat-messages { flex: 1; padding: 20px; overflow-y: auto; max-height: 500px; display: flex; flex-direction: column; gap: 15px; }
+        .message { max-width: 80%; padding: 15px 20px; border-radius: 20px; position: relative; animation: slideIn 0.3s ease-out; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .message.user { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; align-self: flex-end; margin-left: auto; }
+        .message.bot { background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); color: #333; align-self: flex-start; border-left: 4px solid #4facfe; }
+        .message-content { line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; }
+        .message-time { font-size: 0.8rem; opacity: 0.7; margin-top: 8px; }
+        .chat-input-container { padding: 20px; background: #f8f9fa; border-top: 1px solid #e9ecef; }
+        .chat-input-box { display: flex; gap: 10px; align-items: flex-end; }
+        .chat-input { flex: 1; padding: 15px; border: 2px solid #e9ecef; border-radius: 25px; font-size: 16px; outline: none; transition: all 0.3s ease; resize: none; min-height: 50px; max-height: 120px; }
+        .chat-input:focus { border-color: #4facfe; box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.1); }
+        .send-btn { padding: 15px 25px; background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; border: none; border-radius: 25px; cursor: pointer; font-weight: 600; transition: all 0.3s ease; display: flex; align-items: center; gap: 8px; }
+        .send-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(79, 172, 254, 0.3); }
+        .send-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .right-panel { display: flex; flex-direction: column; gap: 20px; }
+        .panel-section { background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); }
+        .section-title { font-size: 1.3rem; font-weight: 700; margin-bottom: 20px; color: #333; border-bottom: 3px solid #4facfe; padding-bottom: 10px; }
+        .status-indicator { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 10px; animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(79, 172, 254, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(79, 172, 254, 0); } 100% { box-shadow: 0 0 0 0 rgba(79, 172, 254, 0); } }
+        .status-connected { background-color: #28a745; }
+        .status-disconnected { background-color: #dc3545; }
+        .margin-top-10 { margin-top: 10px; }
+        .db-info { font-size: 0.9rem; color: #666; margin-top: 10px; }
+        .model-info { background: #e3f2fd; padding: 15px; border-radius: 8px; margin-top: 10px; font-size: 0.9rem; }
+        .model-select, .collection-select, .embedding-model-select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; margin-top: 10px; }
+        .document-upload { margin-top: 15px; }
+        #fileInput { display: none; }
+        .upload-btn { background: #28a745; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; margin-right: 10px; margin-bottom: 10px; }
+        .upload-btn:hover { background: #218838; }
+        .upload-btn.danger { background: #dc3545; }
+        .upload-btn.danger:hover { background: #c82333; }
+        .document-list { max-height: 150px; overflow-y: auto; margin-top: 10px; }
+        .document-item { padding: 8px 12px; background: #f8f9fa; margin: 5px 0; border-radius: 5px; font-size: 0.9rem; display: flex; justify-content: space-between; align-items: center; }
+        .document-item:hover { background: #e9ecef; }
+        .collection-input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; margin-top: 10px; }
+        .topk-select { width: 60px; padding: 2px; }
+        .chromadb-controls { display: flex; gap: 10px; margin-top: 10px; }
+        .small-btn { padding: 5px 10px; font-size: 0.8rem; border: none; border-radius: 3px; cursor: pointer; }
+        .small-btn.primary { background: #007bff; color: white; }
+        .small-btn.success { background: #28a745; color: white; }
+        .small-btn.danger { background: #dc3545; color: white; }
+        .feedback-container { margin-top: 12px; padding-top: 8px; border-top: 1px solid #ddd; }
+        .feedback-btn { background: none; border: 1px solid #ccc; border-radius: 15px; padding: 3px 8px; margin-left: 8px; cursor: pointer; transition: all 0.2s ease; }
+        .feedback-btn:hover { background: #e9ecef; transform: scale(1.1); }
+        .scrape-input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; margin-top: 10px; }
+        .scrape-btn { margin-top: 10px; padding: 8px 15px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; transition: background-color 0.3s; }
+        .scrape-btn:hover { background: #0056b3; }
+        .scrape-btn:disabled { background-color: #6c757d; cursor: not-allowed; }
+        .website-example { padding: 8px 12px; background: #f0f8ff; border-radius: 5px; margin-bottom: 8px; cursor: pointer; transition: background 0.2s; font-size: 0.85rem; border-left: 3px solid #007bff; }
+        .website-example:hover { background: #e0f0ff; }
+        .admin-tool-btn { display: block; width: 100%; padding: 12px; background: linear-gradient(135deg, #6c757d 0%, #343a40 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; text-align: center; text-decoration: none; transition: all 0.3s ease; }
+        .admin-tool-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2); }
+        @media (max-width: 820px) {
+            body { padding: 10px; }
+            .container { border-radius: 15px; }
+            .main-content { grid-template-columns: 1fr; padding: 15px; gap: 20px; }
+            .header { padding: 25px; }
+            .header h1 { font-size: 2rem; }
+            .header p { font-size: 1rem; }
+            .chat-messages { max-height: 45vh; }
+            .panel-section { padding: 20px; }
+            .section-title { font-size: 1.2rem; }
+        }
+        @media (max-width: 480px) {
+            body { padding: 5px; }
+            .main-content { padding: 10px; }
+            .header { padding: 20px; }
+            .header h1 { font-size: 1.6rem; }
+            .header p { font-size: 0.9rem; }
+            .chat-input-container { padding: 15px; }
+            .chat-input-box { flex-direction: column; align-items: stretch; }
+            .send-btn { justify-content: center; padding: 12px; }
+            .panel-section { padding: 15px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 学生支援チャットボット【管理者】</h1>
+            <p>学生支援のためのAIチャットボット</p>
+        </div>
+
+        <div class="main-content">
+            <div class="chat-container">
+                <div class="chat-header">💬 AIチャット</div>
+                <div class="chat-messages" id="chatMessages">
+                    <div class="message bot">
+                        <div class="message-content">
+                            私は学生支援チャットボットです。🚀<br>
+                            - 学生証を紛失・盗難・汚損したときは？<br>
+                            - 新しいサークルを作るには？<br>
+                            - 休学・復学・退学の手続きをしたいときは？<br>
+                            様々な質問にお答えします！
+                        </div>
+                        <div class="message-time">システム起動時刻</div>
+                    </div>
+                </div>
+                <div class="chat-input-container">
+                    <div class="chat-input-box">
+                        <textarea id="chatInput" class="chat-input" placeholder="質問を入力してください..." rows="1"></textarea>
+                        <button id="sendBtn" class="send-btn">
+                            <span>送信</span>
+                            <span>🔍</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="right-panel">
+                <div class="panel-section">
+                    <h3 class="section-title">🔗 接続状況</h3>
+                    <div>
+                        <span id="chromadbStatus" class="status-indicator status-disconnected"></span>
+                        <span id="chromadbStatusText">ChromaDB接続確認中...</span>
+                    </div>
+                    <div class="margin-top-10">
+                        <span id="ollamaStatus" class="status-indicator status-disconnected"></span>
+                        <span id="ollamaStatusText">Ollama接続確認中...</span>
+                    </div>
+                    <div class="db-info">
+                        <strong>バックエンド API:</strong> <span id="backendUrl"></span>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h3 class="section-title">🧠 AI設定</h3>
+                    <div class="model-info">
+                        <label for="modelSelect"><strong>使用モデル:</strong></label><br>
+                        <select id="topKSelect" class="topk-select" title="検索件数を選択">
+                            <option value="3">3</option>
+                            <option value="5" selected>5</option>
+                            <option value="10">10</option>
+                        </select>
+                        <select id="modelSelect" class="model-select">
+                        </select>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h3 class="section-title">🗃️ ChromaDBコレクション</h3>
+                    <div>
+                        <label for="collectionSelect"><strong>コレクション:</strong></label><br>
+                        <select id="collectionSelect" class="collection-select"></select>
+                    </div>
+                    <div>
+                        <input type="text" id="newCollectionName" class="collection-input" placeholder="新しいコレクション名">
+                        <div class="chromadb-controls">
+                            <button class="small-btn success" onclick="createCollection()">作成</button>
+                            <button class="small-btn danger" onclick="deleteCollection()">削除</button>
+                            <button class="small-btn primary" onclick="refreshCollections()">更新</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h3 class="section-title">🔗 埋め込みモデル</h3>
+                    <div>
+                        <label for="embeddingModelSelect"><strong>埋め込みモデル:</strong></label><br>
+                        <select id="embeddingModelSelect" class="embedding-model-select">
+                            <option value="all-MiniLM-L6-v2" selected>all-MiniLM-L6-v2</option>
+                            <option value="all-mpnet-base-v2">all-mpnet-base-v2</option>
+                            <option value="multi-qa-MiniLM-L6-cos-v1">multi-qa-MiniLM-L6-cos-v1</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h3 class="section-title">📄 文書管理</h3>
+                    <div class="document-upload">
+                        <input type="file" id="fileInput" accept=".txt,.md,.pdf,.docx" multiple>
+                        <button class="upload-btn" onclick="document.getElementById('fileInput').click()">📁 文書アップロード</button>
+                        <button class="upload-btn danger" onclick="clearCollection()">🗑️ コレクションクリア</button>
+                    </div>
+                    <div class="document-list" id="documentList"></div>
+                </div>
+
+                <div class="panel-section">
+                    <h3 class="section-title">🌐 ウェブサイトから取得</h3>
+                    <div>
+                        <input type="text" id="scrapeUrlInput" class="scrape-input" placeholder="https://...">
+                        <button id="scrapeBtn" class="scrape-btn" onclick="scrapeWebsite()">このURLから情報を取得</button>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h3 class="section-title">🎓 学習用ウェブサイト例</h3>
+                    <div class="website-example" onclick="setScrapeUrl('https://www.sgu.ac.jp/campuslife/support/madoguchi.html')">窓口業務について</div>
+                    <div class="website-example" onclick="setScrapeUrl('https://www.sgu.ac.jp/campuslife/support/certification.html')">証明書の発行について</div>
+                    <div class="website-example" onclick="setScrapeUrl('https://www.sgu.ac.jp/campuslife/support/j09tjo000003g3l6.html')">諸証明 / 各種願出・届出</div>
+                </div>
+                
+                <div class="panel-section">
+                    <h3 class="section-title">🛠️ 管理ツール</h3>
+                    <a href="/log" target="_blank" class="admin-tool-btn">チャットログを表示</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // ★★★★★ 修正点: 全体をDOMContentLoadedで囲み、イベント委任を使用 ★★★★★
+    document.addEventListener('DOMContentLoaded', () => {
+        const chatMessages = document.getElementById('chatMessages');
+        const chatInput = document.getElementById('chatInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const modelSelect = document.getElementById('modelSelect');
+        const fileInput = document.getElementById('fileInput');
+        const documentList = document.getElementById('documentList');
+        const collectionSelect = document.getElementById('collectionSelect');
+        const topKSelect = document.getElementById('topKSelect');
+        const embeddingModelSelect = document.getElementById('embeddingModelSelect');
+        const scrapeUrlInput = document.getElementById('scrapeUrlInput');
+        const scrapeBtn = document.getElementById('scrapeBtn');
+        
+        let currentCollection = '';
+        let backendConnected = false;
+
+        function addMessage(text, type) {
+            const messageWrapper = document.createElement('div');
+            messageWrapper.className = `message ${type}`;
+            const messageContent = document.createElement('div');
+            messageContent.className = 'message-content';
+            messageContent.textContent = text;
+            messageWrapper.appendChild(messageContent);
+            const messageTime = document.createElement('div');
+            messageTime.className = 'message-time';
+            messageTime.textContent = new Date().toLocaleTimeString();
+            messageWrapper.appendChild(messageTime);
+            chatMessages.appendChild(messageWrapper);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            return messageWrapper;
+        }
+
+        async function sendFeedback(element, rating) {
+            const messageWrapper = element.closest('.message');
+            const logId = messageWrapper.dataset.logId;
+            if (!logId) {
+                console.error("Log ID not found for feedback.");
+                addMessage('フィードバックの送信に失敗しました (log_idが見つかりません)', 'bot');
+                return;
+            }
+            
+            try {
+                const res = await fetch(`/feedback`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ log_id: logId, rating: rating })
+                });
+                if(!res.ok) {
+                    const errorData = await res.json();
+                    throw new Error(errorData.detail || "Failed to send feedback.");
+                }
+                const feedbackContainer = element.parentElement;
+                feedbackContainer.innerHTML = '<span style="font-size: 0.8rem; color: #28a745;">フィードバックありがとうございます！</span>';
+            } catch(error) {
+                console.error("Error sending feedback:", error);
+                addMessage(`フィードバックの送信中にエラーが発生しました: ${error.message}`, 'bot');
+            };
+        }
+
+        async function initializeSystem() {
+            document.getElementById('backendUrl').textContent = window.location.origin;
+            await checkBackendConnection();
+            if (backendConnected) {
+                await checkChromaDBConnection();
+                await checkOllamaConnection();
+                await refreshCollections();
+            }
+        }
+
+        async function checkBackendConnection() {
+            try {
+                const response = await fetch(`/health`);
+                backendConnected = response.ok;
+                if (!backendConnected) addMessage('❌ バックエンドサーバーに接続できません。', 'bot');
+            } catch (error) {
+                backendConnected = false;
+                addMessage('❌ バックエンドサーバーに接続できません。', 'bot');
+            }
+        }
+        
+        function updateStatus(elementId, textId, connected, serviceName) {
+            const statusIndicator = document.getElementById(elementId);
+            const statusText = document.getElementById(textId);
+            if(statusIndicator && statusText) {
+                statusIndicator.className = `status-indicator ${connected ? 'status-connected' : 'status-disconnected'}`;
+                statusText.textContent = connected ? `${serviceName} 接続済み` : `${serviceName} 未接続`;
+            }
+        }
+
+        async function checkChromaDBConnection() {
+            try {
+                const response = await fetch(`/chromadb/status`);
+                updateStatus('chromadbStatus', 'chromadbStatusText', response.ok, 'ChromaDB');
+            } catch (error) {
+                updateStatus('chromadbStatus', 'chromadbStatusText', false, 'ChromaDB');
+            }
+        }
+
+        async function checkOllamaConnection() {
+            try {
+                const response = await fetch(`/ollama/status`);
+                const data = await response.json();
+                updateStatus('ollamaStatus', 'ollamaStatusText', response.ok && data.connected, 'Ollama');
+                if (response.ok && data.models) {
+                    updateGenericList(data.models.map(m => m.name), modelSelect, 'llama3:8b');
+                }
+            } catch (error) {
+                updateStatus('ollamaStatus', 'ollamaStatusText', false, 'Ollama');
+            }
+        }
+
+        async function sendMessage() {
+            const userInput = chatInput.value.trim();
+            if (!userInput) return;
+            if (!currentCollection) {
+                addMessage('❌ コレクションが選択されていません。', 'bot');
+                return;
+            }
+            addMessage(userInput, 'user');
+            chatInput.value = '';
+            chatInput.style.height = 'auto';
+            const botMessageElement = addMessage('思考中...', 'bot');
+            const botMessageContent = botMessageElement.querySelector('.message-content');
+            let fullResponse = '';
+            try {
+                const response = await fetch(`/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        query: userInput,
+                        model: modelSelect.value,
+                        collection: currentCollection,
+                        embedding_model: embeddingModelSelect.value,
+                        top_k: parseInt(topKSelect.value, 10)
+                    })
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `API error: ${response.statusText}`);
+                }
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                botMessageContent.textContent = '';
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) {
+                        if (botMessageElement.dataset.logId) {
+                            const feedbackContainer = document.createElement('div');
+                            feedbackContainer.className = 'feedback-container';
+                            feedbackContainer.innerHTML = `
+                            <span>この回答は役に立ちましたか？</span>
+                            <button class="feedback-btn" data-rating="good">👍</button>
+                            <button class="feedback-btn" data-rating="bad">👎</button>
+                            `;
+                            botMessageElement.appendChild(feedbackContainer);
+                        }
+                        break;
+                    }
+                    
+                    const chunk = decoder.decode(value, { stream: true });
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.trim().startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.substring(6));
+                                if (data.log_id) {
+                                    botMessageElement.dataset.logId = data.log_id;
+                                }
+                                if (data.content) {
+                                    fullResponse += data.content;
+                                    botMessageContent.textContent = fullResponse;
+                                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                                }
+                                if (data.search_results) {
+                                    // document.getElementById('lastSearch').textContent = new Date().toLocaleTimeString();
+                                }
+                            } catch (e) {}
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('メッセージ送信エラー:', error);
+                botMessageContent.textContent = `エラーが発生しました: ${error.message}`;
+            }
+        }
+
+        async function handleFileUpload(event) {
+            const files = Array.from(event.target.files);
+            if (files.length === 0 || !currentCollection) {
+                addMessage(files.length === 0 ? 'ファイルが選択されていません。' : '❌ コレクションを選択してください。', 'bot');
+                return;
+            }
+            for (const file of files) {
+                const botMsg = addMessage(`⏳「${file.name}」を処理中...`, 'bot');
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('collection_name', currentCollection);
+                formData.append('embedding_model', embeddingModelSelect.value);
+                try {
+                    const response = await fetch(`/upload`, { method: 'POST', body: formData });
+                    const result = await response.json();
+                    if (response.ok) {
+                        botMsg.querySelector('.message-content').textContent = `✅「${file.name}」をコレクション「${currentCollection}」に追加しました（${result.chunks}チャンク）`;
+                        await updateDocumentList();
+                    } else {
+                        botMsg.querySelector('.message-content').textContent = `❌「${file.name}」の処理中にエラー: ${result.detail}`;
+                    }
+                } catch (error) {
+                    botMsg.querySelector('.message-content').textContent = `❌「${file.name}」の処理中に通信エラー: ${error.message}`;
+                }
+            }
+            fileInput.value = '';
+        }
+
+        async function createCollection() {
+            const collectionName = document.getElementById('newCollectionName').value.trim();
+            if (!collectionName) {
+                addMessage('❌ コレクション名を入力してください。', 'bot');
+                return;
+            }
+            try {
+                const response = await fetch(`/collections`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: collectionName })
+                });
+                const result = await response.json();
+                addMessage(response.ok ? `✅ コレクション「${collectionName}」を作成しました` : `❌ 作成失敗: ${result.detail}`, 'bot');
+                if (response.ok) {
+                    document.getElementById('newCollectionName').value = '';
+                    await refreshCollections();
+                }
+            } catch (error) {
+                addMessage(`❌ 作成中に通信エラー: ${error.message}`, 'bot');
+            }
+        }
+        
+        async function deleteCollection() {
+            const collectionName = collectionSelect.value;
+            if (!collectionName || !confirm(`コレクション「${collectionName}」を本当に削除しますか？`)) return;
+            try {
+                const response = await fetch(`/collections/${collectionName}`, { method: 'DELETE' });
+                const result = await response.json();
+                addMessage(response.ok ? `✅ コレクション「${collectionName}」を削除しました` : `❌ 削除失敗: ${result.detail}`, 'bot');
+                if (response.ok) await refreshCollections();
+            } catch (error) {
+                addMessage(`❌ 削除中に通信エラー: ${error.message}`, 'bot');
+            }
+        }
+
+        async function refreshCollections() {
+            try {
+                const response = await fetch(`/collections`);
+                if (response.ok) {
+                    const collections = await response.json();
+                    updateCollectionList(collections.map(c => c.name));
+                }
+            } catch (error) {
+                addMessage(`❌ コレクションの更新に失敗: ${error.message}`, 'bot');
+            }
+        }
+
+        async function updateDocumentList() {
+            if (!currentCollection) {
+                documentList.innerHTML = '<span>コレクションを選択してください</span>';
+                return;
+            }
+            documentList.innerHTML = '読み込み中...';
+            try {
+                const response = await fetch(`/collections/${currentCollection}/documents`);
+                const data = await response.json();
+                documentList.innerHTML = '';
+                if (response.ok && data.documents && data.documents.length > 0) {
+                     data.documents.forEach(doc => {
+                        const item = document.createElement('div');
+                        item.className = 'document-item';
+                        item.textContent = doc.id;
+                        documentList.appendChild(item);
+                    });
+                } else {
+                    documentList.innerHTML = '<span>ドキュメントはありません</span>';
+                }
+            } catch (error) {
+                documentList.innerHTML = '<span>リストの取得中にエラーが発生しました</span>';
+            }
+        }
+
+        function updateGenericList(names, selectElement, defaultValue = '') {
+            const currentValue = selectElement.value;
+            selectElement.innerHTML = '';
+            names.forEach(name => {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                selectElement.appendChild(option);
+            });
+            if (names.includes(currentValue)) {
+                selectElement.value = currentValue;
+            } else if (names.includes(defaultValue)) {
+                selectElement.value = defaultValue;
+            } else if (names.length > 0) {
+                selectElement.value = names[0];
+            }
+            return selectElement.value || '';
+        }
+
+        function updateCollectionList(collections) {
+            currentCollection = updateGenericList(collections, collectionSelect);
+            updateDocumentList();
+        }
+        
+        async function clearCollection() {
+            if (!currentCollection || !confirm(`コレクション「${currentCollection}」内の全ドキュメントをクリアしますか？`)) return;
+            try {
+                addMessage(`⏳ コレクション「${currentCollection}」をクリア中...`, 'bot');
+                await fetch(`/collections/${currentCollection}`, { method: 'DELETE' });
+                await fetch(`/collections`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: currentCollection })
+                });
+                addMessage(`✅ コレクション「${currentCollection}」をクリアしました。`, 'bot');
+                await refreshCollections();
+            } catch (error) {
+                addMessage(`❌ コレクションのクリア中にエラー: ${error.message}`, 'bot');
+            }
+        }
+
+        async function scrapeWebsite() {
+            const url = scrapeUrlInput.value.trim();
+            if (!url || !currentCollection) {
+                addMessage(!url ? '❌ URLを入力してください。' : '❌ コレクションを選択してください。', 'bot');
+                return;
+            }
+            scrapeBtn.disabled = true;
+            scrapeBtn.textContent = '取得中...';
+            addMessage(`⏳ URLから情報を取得中...\n${url}`, 'bot');
+            try {
+                const response = await fetch(`/scrape`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        url: url,
+                        collection_name: currentCollection,
+                        embedding_model: embeddingModelSelect.value
+                    })
+                });
+                const result = await response.json();
+                addMessage(response.ok ? `✅ URLの情報を追加しました（${result.chunks}チャンク）` : `❌ 取得失敗: ${result.detail}`, 'bot');
+                if (response.ok) await updateDocumentList();
+            } catch (error) {
+                addMessage(`❌ 通信エラー: ${error.message}`, 'bot');
+            } finally {
+                scrapeBtn.disabled = false;
+                scrapeBtn.textContent = 'このURLから情報を取得';
+                scrapeUrlInput.value = '';
+            }
+        }
+
+        // Make functions globally available for inline onclick handlers
+        window.createCollection = createCollection;
+        window.deleteCollection = deleteCollection;
+        window.refreshCollections = refreshCollections;
+        window.clearCollection = clearCollection;
+        window.scrapeWebsite = scrapeWebsite;
+        window.setScrapeUrl = function(url) {
+            scrapeUrlInput.value = url;
+        }
+
+        sendBtn.addEventListener('click', sendMessage);
+        chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+        chatInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+        collectionSelect.addEventListener('change', (e) => {
+            currentCollection = e.target.value;
+            updateDocumentList();
+        });
+        fileInput.addEventListener('change', handleFileUpload);
+        
+        // Event Delegation for Feedback
+        chatMessages.addEventListener('click', (e) => {
+            if (e.target.classList.contains('feedback-btn')) {
+                const rating = e.target.dataset.rating;
+                if (rating) {
+                    sendFeedback(e.target, rating);
+                }
+            }
+        });
+
+        initializeSystem();
+    });
+</script>
+</body>
+</html>
